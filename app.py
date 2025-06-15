@@ -23,11 +23,11 @@ class FastJobSeekerDashboard:
         
         # Define data sources with years
         data_sources = [
-            {'file': 'optimized_employers.parquet', 'year': '2024', 'limit': 15000},
-            {'file': 'optimized_employers.csv', 'year': '2024', 'limit': 15000},
-            {'file': 'LCA_2025_dashboard_ready.csv', 'year': '2025', 'limit': 15000},
-            {'file': 'likely_cap_exempt_employers.csv', 'year': '2024', 'limit': 15000},
-            {'file': 'cap_exempt_analysis_results.csv', 'year': '2024', 'limit': 15000}
+            {'file': 'optimized_employers.parquet', 'year': '2024', 'limit': None},
+            {'file': 'optimized_employers.csv', 'year': '2024', 'limit': None},
+            {'file': 'LCA_2025_dashboard_ready.csv', 'year': '2025', 'limit': None},
+            {'file': 'likely_cap_exempt_employers.csv', 'year': '2024', 'limit': None},
+            {'file': 'cap_exempt_analysis_results.csv', 'year': '2024', 'limit': None}
         ]
         
         combined_data = []
@@ -46,7 +46,10 @@ class FastJobSeekerDashboard:
                     if filename.endswith('.parquet'):
                         df = pd.read_parquet(filename)
                     else:
-                        df = pd.read_csv(filename, nrows=limit)
+                        if limit is not None:
+                            df = pd.read_csv(filename, nrows=limit)
+                        else:
+                            df = pd.read_csv(filename)
                     
                     # Add/fix year column
                     df['Data_Year'] = year
