@@ -138,6 +138,11 @@ class FastJobSeekerDashboard:
                     # Normalize: Title Case for city, Upper Case for state, strip whitespace
                     city_clean = str(row['City']).strip().title()
                     state_clean = str(row['State']).strip().upper()
+                    
+                    # Skip ZIP codes (numeric-only cities) - they shouldn't be in city list
+                    if city_clean.isdigit():
+                        continue
+                        
                     normalized_combo = f"{city_clean}, {state_clean}"
                     normalized_combos.append(normalized_combo)
                 
