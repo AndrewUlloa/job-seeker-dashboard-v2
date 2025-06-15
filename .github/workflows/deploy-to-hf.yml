@@ -2,73 +2,81 @@ name: Deploy to Hugging Face Spaces
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    
+
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        lfs: true
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.9'
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install huggingface_hub
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-    
-    - name: Deploy to Hugging Face Spaces
-      env:
-        HF_TOKEN: ${{ secrets.HF_TOKEN }}
-      run: |
-        python -c "
-        import os
-        from huggingface_hub import HfApi
-        
-        # Initialize HF API
-        api = HfApi()
-        
-        # Repository details
-        repo_id = 'Andrew-Ulloa/job-seeker-dashboard-v2'
-        repo_type = 'space'
-        
-        # Get commit info
-        commit_sha = os.getenv('GITHUB_SHA', 'unknown')[:7]
-        commit_msg = 'Deploy from GitHub commit ' + commit_sha
-        
-        print(f'🚀 Deploying to HF Space: {repo_id}')
-        print(f'📝 Commit: {commit_msg}')
-        
-        try:
-            # Upload all files
-            api.upload_folder(
-                folder_path='.',
-                repo_id=repo_id,
-                repo_type=repo_type,
-                token=os.getenv('HF_TOKEN'),
-                commit_message=commit_msg,
-                ignore_patterns=['.git*', '__pycache__', '*.pyc', '.DS_Store']
-            )
-            print('✅ Successfully deployed to Hugging Face Spaces!')
-            print(f'🌐 Live at: https://huggingface.co/spaces/{repo_id}')
-        except Exception as e:
-            print(f'❌ Deployment failed: {e}')
-            exit(1)
-        "
-    
-    - name: Verify deployment
-      run: |
-        echo "🎉 Deployment completed!"
-        echo "📍 Space URL: https://huggingface.co/spaces/Andrew-Ulloa/job-seeker-dashboard-v2"
-        echo "🔄 The space should rebuild automatically with the new code." 
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install huggingface_hub
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Deploy to Hugging Face Spaces
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          python -c "
+          import os
+          from huggingface_hub import HfApi
+
+          # Initialize HF API
+          api = HfApi()
+
+          # Repository details
+          repo_id = 'Andrew-Ulloa/job-seeker-dashboard-v2'
+          repo_type = 'space'
+
+          # Get commit info
+          commit_sha = os.getenv('GITHUB_SHA', 'unknown')[:7]
+          commit_msg = 'Deploy from GitHub commit ' + commit_sha
+
+          print(f'🚀 Deploying to HF Space: {repo_id}')
+          print(f'📝 Commit: {commit_msg}')
+
+          try:
+              # Upload all files and force rebuild
+              result = api.upload_folder(
+                  folder_path='.',
+                  repo_id=repo_id,
+                  repo_type=repo_type,
+                  token=os.getenv('HF_TOKEN'),
+                  commit_message=commit_msg,
+                  ignore_patterns=['.git*', '__pycache__', '*.pyc', '.DS_Store', '.env*'],
+                  create_pr=False
+              )
+              print('✅ Successfully deployed to Hugging Face Spaces!')
+              print(f'🌐 Live at: https://huggingface.co/spaces/{repo_id}')
+              print(f'📝 Commit URL: {result}')
+              
+              # Force restart the space to ensure rebuild
+              print('🔄 Restarting space to ensure rebuild...')
+              api.restart_space(repo_id)
+              print('✅ Space restarted - rebuild should begin!')
+              
+          except Exception as e:
+              print(f'❌ Deployment failed: {e}')
+              exit(1)
+          "
+
+      - name: Verify deployment
+        run: |
+          echo "🎉 Deployment completed!"
+          echo "📍 Space URL: https://huggingface.co/spaces/Andrew-Ulloa/job-seeker-dashboard-v2"
+          echo "🔄 The space should rebuild automatically with the new code."
