@@ -40,7 +40,7 @@ jobs:
           api = HfApi()
 
           # Repository details
-          repo_id = 'AndrewUlloa/job-seeker-dashboard-v2'
+          repo_id = 'Andrew-Ulloa/job-seeker-dashboard-v2'
           repo_type = 'space'
 
           # Get commit info
@@ -78,7 +78,7 @@ jobs:
       - name: Verify deployment
         run: |
           echo "🎉 Deployment completed!"
-          echo "📍 Space URL: https://huggingface.co/spaces/AndrewUlloa/job-seeker-dashboard-v2"
+                      echo "📍 Space URL: https://huggingface.co/spaces/Andrew-Ulloa/job-seeker-dashboard-v2"
           echo "🔄 The space should rebuild automatically with the new code."
           echo "📅 Deployment time: $(date)"
           echo "🆔 Commit SHA: $GITHUB_SHA"
