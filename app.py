@@ -774,8 +774,8 @@ def create_fast_interface():
             """Generate and provide CSV download."""
             filepath = dashboard.download_csv(*inputs)
             if filepath and os.path.exists(filepath):
-                return gr.File.update(value=filepath, visible=True)
-            return gr.File.update(visible=False)
+                return gr.update(value=filepath, visible=True)
+            return gr.update(visible=False)
         
         # Event handlers
         view_all_btn.click(
