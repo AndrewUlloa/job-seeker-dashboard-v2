@@ -703,7 +703,6 @@ def create_fast_interface():
                         label="📋 All Search Results", 
                         interactive=False,
                         wrap=True,
-                        max_rows=None,  # Show all rows
                         elem_classes=["modal-content"]
                     )
                     with gr.Row():
