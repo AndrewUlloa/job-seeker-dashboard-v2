@@ -823,10 +823,14 @@ def main():
         demo = create_fast_interface()
         print("✅ Fast dashboard ready!")
         
+        # Auto-detect if running on Hugging Face Spaces
+        import os
+        is_hf_spaces = os.getenv('SPACE_ID') is not None
+        
         demo.launch(
-            share=False,
-            server_name="0.0.0.0",
-            server_port=7860,
+            share=is_hf_spaces,  # Enable sharing only on HF Spaces
+            server_name="0.0.0.0" if not is_hf_spaces else None,
+            server_port=7860 if not is_hf_spaces else None,
             show_error=True
         )
     except Exception as e:
