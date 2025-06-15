@@ -11,10 +11,13 @@ import os
 import numpy as np
 import time
 from typing import List, Tuple
+import tempfile
+from datetime import datetime
 
 class FastJobSeekerDashboard:
     def __init__(self):
         self.data = None
+        self.last_search_results = None  # Store full results for download
         self.load_data_fast()
         
     def load_data_fast(self):
@@ -272,6 +275,9 @@ class FastJobSeekerDashboard:
             df = df.drop_duplicates(subset=['employer_clean'], keep='first')
             df = df.drop(columns=['employer_clean'])  # Remove helper column
         
+        # Store full results for download
+        self.last_search_results = df.copy()
+        
         # Format results with better column names
         display_cols = []
         col_mapping = {
@@ -301,9 +307,9 @@ class FastJobSeekerDashboard:
                 df_sorted = df.sort_values([sort_columns[0], sort_columns[1]], ascending=[True, False])
             else:
                 df_sorted = df.sort_values(sort_columns[0], ascending=True)
-            result_df = df_sorted[display_cols].head(100)
+            result_df = df_sorted[display_cols].head(100)  # Preview limit
         else:
-            result_df = df[display_cols].head(100)
+            result_df = df[display_cols].head(100)  # Preview limit
         
         # Store year data before renaming columns
         years_in_results = result_df['Data_Year'].unique().tolist() if 'Data_Year' in result_df.columns else ['N/A']
@@ -326,12 +332,12 @@ class FastJobSeekerDashboard:
         
         **Found {total_found:,} unique employers matching your criteria**
         
-        - 📋 **Displaying:** {showing:,} of {total_found:,} results{' (top matches)' if total_found > 100 else ''}
-        - 📍 **States/Territories:** {states_in_results} (in displayed results)
+        - 📋 **Preview:** {showing:,} of {total_found:,} results{' (top matches)' if total_found > 100 else ''}
+        - 📍 **States/Territories:** {states_in_results} (in preview)
         - 📅 **Data Year:** {sorted(years_in_results)}
         - 🔄 **Auto-deduplicated:** Best record kept per employer
         
-        💡 **Tip:** These employers can sponsor H-1B visas year-round!
+        💡 **Tip:** Use "View All Results" to see the complete list or "Download CSV" to export data!
         """
         
         # Create simple chart
@@ -342,12 +348,163 @@ class FastJobSeekerDashboard:
                 x=state_counts.values, 
                 y=state_counts.index, 
                 orientation='h',
-                title=f'📊 Top 10 States/Territories ({len(result_df)} employers)',
+                title=f'📊 Top 10 States/Territories (Preview - {len(result_df)} employers)',
                 labels={'x': 'Count', 'y': 'State'}
             )
             chart.update_layout(height=400)
         
         return result_df, summary, chart
+
+    def get_full_results(self, search_text, states, cities, classifications, 
+                        min_score, min_approval, only_cap_exempt, year_filter='All Years'):
+        """Get ALL results without limit for modal display."""
+        if self.data is None:
+            return pd.DataFrame(), "❌ No data available"
+        
+        # Reuse the same filtering logic but return ALL results
+        df = self.data.copy()
+        
+        # Apply all the same filters...
+        if search_text:
+            mask = df['Employer_Name'].str.contains(search_text, case=False, na=False)
+            df = df[mask]
+        
+        if states:
+            df = df[df['State'].isin(states)]
+        
+        if cities:
+            city_state_conditions = []
+            for city_state in cities:
+                if ', ' in city_state:
+                    city, state = city_state.rsplit(', ', 1)
+                    condition = (
+                        (df['City'].astype(str).str.strip().str.title() == city.strip()) & 
+                        (df['State'].astype(str).str.strip().str.upper() == state.strip())
+                    )
+                    city_state_conditions.append(condition)
+            
+            if city_state_conditions:
+                city_filter = city_state_conditions[0]
+                for condition in city_state_conditions[1:]:
+                    city_filter = city_filter | condition
+                df = df[city_filter]
+        
+        if classifications and 'Classifications' in df.columns:
+            classification_mapping = {
+                '🎓 Universities & Colleges': ['university', 'education'],
+                '🏥 Hospitals & Medical Centers': ['hospital', 'Hospital'],
+                '🔬 Research Organizations': ['research_org', 'Research'],
+                '🏛️ Government Agencies': ['government', 'Government'],
+                '📚 Educational Institutions': ['education', 'university'],
+                '🩺 Healthcare Systems': ['healthcare', 'hospital'],
+                '💼 Professional Services': ['professional_services'],
+                '🏢 Non-profit Organizations': ['nonprofit']
+            }
+            
+            matching_keywords = []
+            for selected_category in classifications:
+                if selected_category in classification_mapping:
+                    matching_keywords.extend(classification_mapping[selected_category])
+            
+            if matching_keywords:
+                mask = df['Classifications'].fillna('').str.lower().str.contains(
+                    '|'.join(matching_keywords), case=False, na=False
+                )
+                df = df[mask]
+        
+        if only_cap_exempt and 'Likely_Cap_Exempt' in df.columns:
+            df = df[df['Likely_Cap_Exempt'] == True]
+        
+        if 'Cap_Exempt_Score' in df.columns:
+            df = df[df['Cap_Exempt_Score'] >= min_score]
+        
+        if 'Approval_Rate' in df.columns:
+            df = df[df['Approval_Rate'] >= min_approval]
+        
+        if year_filter != 'All Years' and 'Data_Year' in df.columns:
+            df = df[df['Data_Year'] == year_filter]
+        
+        # Deduplication
+        if len(df) > 0:
+            df['employer_clean'] = (df['Employer_Name']
+                                   .str.strip()
+                                   .str.upper()
+                                   .str.replace(r'[^\w\s]', '', regex=True)
+                                   .str.replace(r'\s+', ' ', regex=True))
+            
+            sort_cols = []
+            if 'Cap_Exempt_Score' in df.columns:
+                sort_cols.append('Cap_Exempt_Score')
+            if 'Approval_Rate' in df.columns:
+                sort_cols.append('Approval_Rate')
+            if 'Total_Petitions' in df.columns:
+                sort_cols.append('Total_Petitions')
+            
+            if sort_cols:
+                df = df.sort_values(sort_cols, ascending=False)
+            
+            df = df.drop_duplicates(subset=['employer_clean'], keep='first')
+            df = df.drop(columns=['employer_clean'])
+        
+        # Format for display - ALL results
+        display_cols = []
+        col_mapping = {
+            'Employer_Name': 'Employer Name',
+            'City': 'City', 
+            'State': 'State',
+            'Cap_Exempt_Score': 'Cap-Exempt Score',
+            'Approval_Rate': 'Approval Rate',
+            'Total_Petitions': 'Total Petitions',
+            'Data_Year': 'Year'
+        }
+        
+        for col in ['Employer_Name', 'City', 'State', 'Cap_Exempt_Score', 'Approval_Rate', 'Total_Petitions', 'Data_Year']:
+            if col in df.columns:
+                display_cols.append(col)
+        
+        # Sort and return ALL results (no .head() limit)
+        if 'Employer_Name' in df.columns:
+            df = df.sort_values('Employer_Name', ascending=True)
+        
+        result_df = df[display_cols].copy()
+        result_df = result_df.rename(columns=col_mapping)
+        
+        # Round numeric columns
+        for col in ['Cap-Exempt Score', 'Approval Rate']:
+            if col in result_df.columns:
+                result_df[col] = result_df[col].round(3)
+        
+        summary = f"""
+        ## 📊 All Search Results
+        
+        **Showing all {len(result_df):,} unique employers matching your criteria**
+        
+        🔍 **Complete dataset** - no pagination or limits applied
+        """
+        
+        return result_df, summary
+
+    def download_csv(self, search_text, states, cities, classifications, 
+                    min_score, min_approval, only_cap_exempt, year_filter='All Years'):
+        """Generate CSV file for download."""
+        # Get the full results
+        full_df, _ = self.get_full_results(
+            search_text, states, cities, classifications, 
+            min_score, min_approval, only_cap_exempt, year_filter
+        )
+        
+        if full_df.empty:
+            return None
+        
+        # Create temporary file
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"h1b_employers_{timestamp}.csv"
+        filepath = os.path.join(tempfile.gettempdir(), filename)
+        
+        # Save to CSV
+        full_df.to_csv(filepath, index=False)
+        
+        return filepath
 
 def create_fast_interface():
     """Create optimized interface with instant loading."""
@@ -429,22 +586,16 @@ def create_fast_interface():
             spellcheck: false;
         }
         
-        /* Better table column sizing */
-        .dataframe table {
-            table-layout: auto !important;
-            width: 100% !important;
+        /* Custom styling for buttons */
+        .action-buttons {
+            margin-top: 10px;
+            margin-bottom: 10px;
         }
         
-        .dataframe th, .dataframe td {
-            white-space: nowrap !important;
-            overflow: hidden !important;
-            text-overflow: ellipsis !important;
-            min-width: 80px !important;
-        }
-        
-        /* Make manual search button less prominent */
-        .secondary {
-            opacity: 0.7 !important;
+        /* Modal styling */
+        .modal-content {
+            max-height: 80vh;
+            overflow-y: auto;
         }
         """
     ) as demo:
@@ -526,68 +677,102 @@ def create_fast_interface():
             with gr.Column(scale=2):
                 summary_display = gr.Markdown("🔄 **Auto-search enabled!** Results update instantly when you adjust filters.")
                 results_table = gr.Dataframe(
-                    label="📊 Search Results", 
+                    label="📊 Search Results (Preview - First 100)", 
                     interactive=False,
                     wrap=True
                 )
+                
+                # Action buttons row
+                with gr.Row(elem_classes=["action-buttons"]):
+                    view_all_btn = gr.Button("👀 View All Results", variant="primary", size="lg")
+                    download_btn = gr.Button("💾 Download CSV", variant="secondary", size="lg")
         
         chart_display = gr.Plot(label="📈 Geographic Distribution")
         
-        # Define search inputs and outputs for reuse
+        # Modal for full results
+        with gr.Row():
+            with gr.Column():
+                modal_visible = gr.State(False)
+                
+                # Modal content (initially hidden)
+                modal_container = gr.Column(visible=False)
+                with modal_container:
+                    gr.Markdown("## 📊 Complete Results")
+                    modal_summary = gr.Markdown("")
+                    modal_table = gr.Dataframe(
+                        label="📋 All Search Results", 
+                        interactive=False,
+                        wrap=True,
+                        max_rows=None,  # Show all rows
+                        elem_classes=["modal-content"]
+                    )
+                    with gr.Row():
+                        close_modal_btn = gr.Button("❌ Close", variant="secondary")
+                        modal_download_btn = gr.Button("💾 Download These Results", variant="primary")
+        
+        # Hidden file output for downloads
+        download_file = gr.File(visible=False)
+        
+        # Define search inputs for reuse
         search_inputs = [
             search_box, state_filter, city_filter, classification_filter,
             score_slider, approval_slider, cap_exempt_only, year_filter
         ]
         search_outputs = [results_table, summary_display, chart_display]
         
+        # Modal functionality
+        def show_full_results(*inputs):
+            """Show the modal with all results."""
+            full_df, full_summary = dashboard.get_full_results(*inputs)
+            return {
+                modal_container: gr.update(visible=True),
+                modal_table: full_df,
+                modal_summary: full_summary
+            }
+        
+        def hide_modal():
+            """Hide the modal."""
+            return {modal_container: gr.update(visible=False)}
+        
+        def download_results(*inputs):
+            """Generate and provide CSV download."""
+            filepath = dashboard.download_csv(*inputs)
+            if filepath and os.path.exists(filepath):
+                return gr.File.update(value=filepath, visible=True)
+            return gr.File.update(visible=False)
+        
+        # Event handlers
+        view_all_btn.click(
+            fn=show_full_results,
+            inputs=search_inputs,
+            outputs=[modal_container, modal_table, modal_summary]
+        )
+        
+        close_modal_btn.click(
+            fn=hide_modal,
+            outputs=[modal_container]
+        )
+        
+        download_btn.click(
+            fn=download_results,
+            inputs=search_inputs,
+            outputs=[download_file]
+        )
+        
+        modal_download_btn.click(
+            fn=download_results,
+            inputs=search_inputs,
+            outputs=[download_file]
+        )
+        
         # Auto-search when any filter changes
-        search_box.change(
-            fn=dashboard.search_employers,
-            inputs=search_inputs,
-            outputs=search_outputs
-        )
-        
-        state_filter.change(
-            fn=dashboard.search_employers,
-            inputs=search_inputs,
-            outputs=search_outputs
-        )
-        
-        city_filter.change(
-            fn=dashboard.search_employers,
-            inputs=search_inputs,
-            outputs=search_outputs
-        )
-        
-        classification_filter.change(
-            fn=dashboard.search_employers,
-            inputs=search_inputs,
-            outputs=search_outputs
-        )
-        
-        score_slider.change(
-            fn=dashboard.search_employers,
-            inputs=search_inputs,
-            outputs=search_outputs
-        )
-        
-        approval_slider.change(
-            fn=dashboard.search_employers,
-            inputs=search_inputs,
-            outputs=search_outputs
-        )
-        
-        cap_exempt_only.change(
-            fn=dashboard.search_employers,
-            inputs=search_inputs,
-            outputs=search_outputs
-        )
-        
-        year_filter.change(
-            fn=dashboard.search_employers,
-            inputs=search_inputs,
-            outputs=search_outputs
-        )
+        for component in [search_box, state_filter, city_filter, classification_filter,
+                         score_slider, approval_slider, cap_exempt_only, year_filter]:
+            component.change(
+                fn=dashboard.search_employers,
+                inputs=search_inputs,
+                outputs=search_outputs
+            )
         
         # Keep manual search button as backup
         search_btn.click(
@@ -622,6 +807,11 @@ def create_fast_interface():
         - 🔬 **Research Organizations** - Nonprofit research institutes
         
         **🎯 Perfect for:** International students, current H-1B holders looking to switch, professionals seeking year-round opportunities
+        
+        ### 🚀 New Features
+        - **👀 View All Results** - See complete list without pagination limits
+        - **💾 Download CSV** - Export filtered results for offline analysis
+        - **📊 Enhanced Filtering** - Cap-exempt checkbox now shows true difference in results count
         """)
     
     return demo
