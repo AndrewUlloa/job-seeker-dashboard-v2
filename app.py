@@ -150,8 +150,8 @@ class FastJobSeekerDashboard:
                 from collections import Counter
                 combo_counts = Counter(normalized_combos)
                 
-                # Sort alphabetically (not by frequency) and take top 50
-                cities = sorted(combo_counts.keys())[:50]
+                # Get ALL unique cities (no limit) - sorted alphabetically for easy browsing
+                cities = sorted(combo_counts.keys())
             else:
                 cities = []
         else:
@@ -482,7 +482,7 @@ def create_fast_interface():
                     label="🏙️ Cities (Alphabetical)",
                     multiselect=True,
                     value=[],
-                    info=f"Top {len(cities)} cities alphabetically sorted (normalized, no duplicates)",
+                    info=f"All {len(cities)} unique cities from data (normalized, no ZIP codes, no duplicates)",
                     elem_id="city_filter"
                 )
                 
