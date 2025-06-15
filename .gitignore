@@ -61,4 +61,5 @@ flagged/
 
 # Large data files (keep smaller ones for demo)
 *.csv.bak
-*.parquet.bak 
+*.parquet.bak *.csv
+*.parquet
