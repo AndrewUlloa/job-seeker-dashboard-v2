@@ -817,7 +817,7 @@ def create_fast_interface():
 
 def main():
     """Launch the fast dashboard."""
-    print("🚀 Starting Fast Job Seeker Dashboard...")
+    print("🚀 Starting Fast Job Seeker Dashboard (v2.1 - Fixed max_rows issue)...")
     
     try:
         demo = create_fast_interface()
