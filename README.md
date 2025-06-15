@@ -1,5 +1,5 @@
 ---
-title: Job Seeker Dashboard - Cap-Exempt H-1B Employers
+title: Job Seeker Dashboard - Cap-Exempt H-1B Cap-Exempt Employers
 emoji: 🎯
 colorFrom: blue
 colorTo: green
@@ -141,5 +141,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 _This tool is for informational purposes only. Always verify cap-exempt status with employers and immigration attorneys._
 Test deployment
+
 # Trigger GitHub Actions
+
 # Test deployment - HTTP 400 errors fixed! ✅
